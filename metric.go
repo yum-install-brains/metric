@@ -133,10 +133,14 @@ func newTimeseries(builder func() metric, frame ...time.Duration) *timeseries {
 
 	if frame[0] == 0 {
 		interval = time.Minute
+	} else {
+		interval = frame[0]
 	}
 
 	if frame[1] == 0 {
 		totalDuration = interval * 15
+	} else {
+		totalDuration = frame[1]
 	}
 
 	n := int(totalDuration / interval)
