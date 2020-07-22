@@ -74,6 +74,7 @@ func (ts *timeseries) roll() {
 func (ts *timeseries) Add(n float64) {
 	ts.Lock()
 	defer ts.Unlock()
+	ts.roll()
 	ts.total.Add(n)
 	ts.samples[0].Add(n)
 }
