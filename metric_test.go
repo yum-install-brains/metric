@@ -64,7 +64,7 @@ func TestMetricString(t *testing.T) {
 	c := NewCounter()
 	c.Add(1)
 	c.Add(3)
-	if s := c.String(); s != "4" {
+	if s := c.String(); s != `{"type":"c","count":4}` {
 		t.Fatal(s)
 	}
 }
@@ -72,35 +72,25 @@ func TestMetricString(t *testing.T) {
 func TestCounterTimeline(t *testing.T) {
 	now = mockTime(0)
 	c := NewCounter(1*time.Second, 3*time.Second)
-	expect := func(total float64, samples ...float64) h {
-		timeline := v{}
-		for _, s := range samples {
-			timeline = append(timeline, h{"type": "c", "count": s})
-		}
-		return h{
-			"interval": 1,
-			"total":    h{"type": "c", "count": total},
-			"samples":  timeline,
-		}
-	}
-	assertJSON(t, c, expect(0, 0, 0, 0))
+	count := func(x float64) h { return h{"type": "c", "count": x} }
+	assertJSON(t, c, h{"interval": 1, "samples": v{count(0), count(0), count(0)}})
 	c.Add(1)
-	assertJSON(t, c, expect(1, 1, 0, 0))
+	assertJSON(t, c, h{"interval": 1, "samples": v{count(1), count(0), count(0)}})
 	now = mockTime(1)
-	assertJSON(t, c, expect(1, 0, 1, 0))
+	_ = c.String()
+	assertJSON(t, c, h{"interval": 1, "samples": v{count(0), count(1), count(0)}})
 	c.Add(5)
-	assertJSON(t, c, expect(6, 5, 1, 0))
+	assertJSON(t, c, h{"interval": 1, "samples": v{count(5), count(1), count(0)}})
 	now = mockTime(3)
-	assertJSON(t, c, expect(5, 0, 0, 5))
-	now = mockTime(10)
-	assertJSON(t, c, expect(0, 0, 0, 0))
+	_ = c.String()
+	assertJSON(t, c, h{"interval": 1, "samples": v{count(0), count(0), count(5)}})
 }
 
 func TestExpVar(t *testing.T) {
 	expvar.Publish("test:count", NewCounter())
 	expvar.Get("test:count").(Metric).Add(1)
-	if s := expvar.Get("test:count").String(); s != `1` {
-		t.Fatal(s)
+	if expvar.Get("test:count").String() != `{"type":"c","count":1}` {
+		t.Fatal(expvar.Get("test:count"))
 	}
 }
 

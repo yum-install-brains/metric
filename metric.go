@@ -3,7 +3,6 @@ package metric
 import (
 	"encoding/json"
 	"math"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -15,21 +14,14 @@ var now = time.Now
 // Metric is a single meter (counter, gauge or histogram, optionally - with history)
 type Metric interface {
 	Add(n float64)
-	String() string
-}
-
-// metric is an extended private interface
-// Counters implement it.
-type metric interface {
-	Metric
 	Reset()
-	Aggregate(samples []metric)
+	String() string
 }
 
 // NewCounter returns a counter metric that increments the value with each
 // incoming number.
 func NewCounter(frame ...time.Duration) Metric {
-	return newMetric(func() metric { return &counter{} }, frame...)
+	return newMetric(func() Metric { return &counter{} }, frame...)
 }
 
 type timeseries struct {
@@ -37,12 +29,10 @@ type timeseries struct {
 	now      time.Time
 	size     int
 	interval time.Duration
-	total    metric
-	samples  []metric
+	samples  []Metric
 }
 
 func (ts *timeseries) Reset() {
-	ts.total.Reset()
 	for _, s := range ts.samples {
 		s.Reset()
 	}
@@ -67,42 +57,42 @@ func (ts *timeseries) roll() {
 			ts.samples[0] = tmp
 			ts.samples[0].Reset()
 		}
-		ts.total.Aggregate(ts.samples)
 	}
 }
 
 func (ts *timeseries) Add(n float64) {
 	ts.Lock()
 	defer ts.Unlock()
-	ts.roll()
-	ts.total.Add(n)
+	//ts.roll()
 	ts.samples[0].Add(n)
 }
 
 func (ts *timeseries) MarshalJSON() ([]byte, error) {
 	ts.Lock()
 	defer ts.Unlock()
-	ts.roll()
-	return json.Marshal(struct {
+	data, err := json.Marshal(struct {
 		Interval float64  `json:"interval"`
-		Total    Metric   `json:"total"`
-		Samples  []metric `json:"samples"`
-	}{float64(ts.interval) / float64(time.Second), ts.total, ts.samples})
+		Samples  []Metric `json:"samples"`
+	}{float64(ts.interval) / float64(time.Second), ts.samples})
+	ts.roll()
+	return data, err
 }
 
 func (ts *timeseries) String() string {
-	ts.Lock()
-	defer ts.Unlock()
-	value := ts.total.String()
-	ts.roll()
-	return value
+	b, _ := ts.MarshalJSON()
+	return string(b)
+}
+
+func strjson(x interface{}) string {
+	b, _ := json.Marshal(x)
+	return string(b)
 }
 
 type counter struct {
 	count uint64
 }
 
-func (c *counter) String() string { return strconv.FormatFloat(c.value(), 'g', -1, 64) }
+func (c *counter) String() string { return strjson(c) }
 func (c *counter) Reset()         { atomic.StoreUint64(&c.count, math.Float64bits(0)) }
 func (c *counter) value() float64 { return math.Float64frombits(atomic.LoadUint64(&c.count)) }
 func (c *counter) Add(n float64) {
@@ -114,6 +104,7 @@ func (c *counter) Add(n float64) {
 		}
 	}
 }
+
 func (c *counter) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Type  string  `json:"type"`
@@ -121,14 +112,7 @@ func (c *counter) MarshalJSON() ([]byte, error) {
 	}{"c", c.value()})
 }
 
-func (c *counter) Aggregate(samples []metric) {
-	c.Reset()
-	for _, s := range samples {
-		c.Add(s.(*counter).value())
-	}
-}
-
-func newTimeseries(builder func() metric, frame ...time.Duration) *timeseries {
+func newTimeseries(builder func() Metric, frame ...time.Duration) *timeseries {
 	var interval time.Duration
 	var totalDuration time.Duration
 
@@ -145,22 +129,18 @@ func newTimeseries(builder func() metric, frame ...time.Duration) *timeseries {
 	}
 
 	n := int(totalDuration / interval)
-
-	samples := make([]metric, n, n)
+	samples := make([]Metric, n, n)
 	for i := 0; i < n; i++ {
 		samples[i] = builder()
 	}
-
-	totalMetric := builder()
-
-	return &timeseries{interval: interval, total: totalMetric, samples: samples}
+	return &timeseries{interval: interval, samples: samples}
 }
 
-func newMetric(builder func() metric, frame ...time.Duration) Metric {
+func newMetric(builder func() Metric, frame ...time.Duration) Metric {
 	// We need to provide both interval and totalDuration to be able to use time series
 	if len(frame) < 2 {
 		return builder()
 	}
-	return newTimeseries(builder, frame...)
 
+	return newTimeseries(builder, frame...)
 }
