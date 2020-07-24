@@ -83,11 +83,12 @@ func (ts *timeseries) Add(n float64) {
 func (ts *timeseries) MarshalJSON() ([]byte, error) {
 	ts.Lock()
 	defer ts.Unlock()
-	ts.roll()
-	return json.Marshal(struct {
+	val, err := json.Marshal(struct {
 		Interval float64  `json:"interval"`
 		Samples  []Metric `json:"samples"`
 	}{float64(ts.interval) / float64(time.Second), ts.samples})
+	ts.roll()
+	return val, err
 }
 
 func (ts *timeseries) String() string {

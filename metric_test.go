@@ -105,10 +105,12 @@ func TestTimeline(t *testing.T) {
 	c.Add(1)
 	assertJSON(t, c, h{"interval": 1, "samples": v{count(1), count(0), count(0)}})
 	now = mockTime(1)
-	assertJSON(t, c, h{"interval": 1, "samples": v{count(0), count(1), count(0)}})
+	// We want to keep values of recent frame until they were read
+	assertJSON(t, c, h{"interval": 1, "samples": v{count(1), count(0), count(0)}})
 	c.Add(5)
 	assertJSON(t, c, h{"interval": 1, "samples": v{count(5), count(1), count(0)}})
 	now = mockTime(3)
+	assertJSON(t, c, h{"interval": 1, "samples": v{count(5), count(1), count(0)}})
 	assertJSON(t, c, h{"interval": 1, "samples": v{count(0), count(0), count(5)}})
 }
 
@@ -128,7 +130,7 @@ func TestExpVar(t *testing.T) {
 	if expvar.Get("test:count").String() != `{"type":"c","count":1}` {
 		t.Fatal(expvar.Get("test:count"))
 	}
-	if expvar.Get("test:timeline").String() != `{"interval":1,"samples":[{"type":"c","count":0},{"type":"c","count":1},{"type":"c","count":0}]}` {
+	if expvar.Get("test:timeline").String() != `{"interval":1,"samples":[{"type":"c","count":1},{"type":"c","count":0},{"type":"c","count":0}]}` {
 		t.Fatal(expvar.Get("test:timeline"))
 	}
 }
