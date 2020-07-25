@@ -86,6 +86,9 @@ func (ts *timeseries) String() string {
 }
 
 func (ts *timeseries) Get() []float64 {
+	ts.Lock()
+	defer ts.Unlock()
+
 	values := make([]float64, len(ts.samples), len(ts.samples))
 
 	for i, sample := range ts.samples {
