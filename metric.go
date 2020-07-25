@@ -91,6 +91,7 @@ func (ts *timeseries) Get() []float64 {
 	for i, sample := range ts.samples {
 		values[i] = sample.(*counter).value()
 	}
+	ts.roll()
 	return values
 }
 
