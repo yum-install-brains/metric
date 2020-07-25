@@ -3,7 +3,6 @@ package metric
 import (
 	"encoding/json"
 	"expvar"
-	"math"
 	"math/rand"
 	"reflect"
 	"testing"
@@ -52,51 +51,6 @@ func TestCounter(t *testing.T) {
 	assertJSON(t, c, h{"type": "c", "count": 0})
 }
 
-func TestGauge(t *testing.T) {
-	g := &gauge{}
-	assertJSON(t, g, h{"type": "g", "mean": 0, "min": 0, "max": 0})
-	g.Add(1)
-	assertJSON(t, g, h{"type": "g", "mean": 1, "min": 1, "max": 1})
-	g.Add(5)
-	assertJSON(t, g, h{"type": "g", "mean": 3, "min": 1, "max": 5})
-	g.Add(0)
-	assertJSON(t, g, h{"type": "g", "mean": 2, "min": 0, "max": 5})
-	g.Reset()
-	assertJSON(t, g, h{"type": "g", "mean": 0, "min": 0, "max": 0})
-}
-
-func TestHistogram(t *testing.T) {
-	hist := &histogram{}
-	assertJSON(t, hist, h{"type": "h", "p50": 0, "p90": 0, "p99": 0})
-	hist.Add(1)
-	assertJSON(t, hist, h{"type": "h", "p50": 1, "p90": 1, "p99": 1})
-	hist.Reset()
-	for i := 0; i < 100; i++ {
-		hist.Add(float64(i))
-	}
-	assertJSON(t, hist, h{"type": "h", "p50": 49, "p90": 89, "p99": 98})
-}
-
-func TestHistogramNormalDist(t *testing.T) {
-	hist := &histogram{}
-	rand.Seed(time.Now().UnixNano())
-	for i := 0; i < 10000; i++ {
-		hist.Add(rand.Float64() * 10)
-	}
-	b, _ := hist.MarshalJSON()
-	p := h{}
-	json.Unmarshal(b, &p)
-	if math.Abs(p["p50"].(float64)-5) > 0.5 {
-		t.Fatal(p["p50"])
-	}
-	if math.Abs(p["p90"].(float64)-9) > 0.5 {
-		t.Fatal(p["p90"])
-	}
-	if math.Abs(p["p99"].(float64)-10) > 0.5 {
-		t.Fatal(p["p99"])
-	}
-}
-
 func TestTimeline(t *testing.T) {
 	now = mockTime(0)
 	c := NewCounter("3s1s")
@@ -142,32 +96,8 @@ func BenchmarkMetrics(b *testing.B) {
 			c.Add(rand.Float64())
 		}
 	})
-	b.Run("gauge", func(b *testing.B) {
-		c := &gauge{}
-		for i := 0; i < b.N; i++ {
-			c.Add(rand.Float64())
-		}
-	})
-	b.Run("histogram", func(b *testing.B) {
-		c := &histogram{}
-		for i := 0; i < b.N; i++ {
-			c.Add(rand.Float64())
-		}
-	})
 	b.Run("timeline/counter", func(b *testing.B) {
 		c := NewCounter("10s1s")
-		for i := 0; i < b.N; i++ {
-			c.Add(rand.Float64())
-		}
-	})
-	b.Run("timeline/gauge", func(b *testing.B) {
-		c := NewGauge("10s1s")
-		for i := 0; i < b.N; i++ {
-			c.Add(rand.Float64())
-		}
-	})
-	b.Run("timeline/histogram", func(b *testing.B) {
-		c := NewHistogram("10s1s")
 		for i := 0; i < b.N; i++ {
 			c.Add(rand.Float64())
 		}
