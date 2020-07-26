@@ -20,10 +20,16 @@ type Metric interface {
 	Get() []float64
 }
 
+type Syncronizer interface {
+	GetTime() time.Time
+	// Sync one metric frame start with another
+	Sync(m Metric)
+}
+
 // NewCounter returns a counter metric that increments the value with each
 // incoming number.
-func NewCounter(frames ...string) Metric {
-	return newMetric(func() Metric { return &counter{} }, frames...)
+func NewCounter(frameStart time.Time, frames ...string) Metric {
+	return newMetric(func() Metric { return &counter{} }, frameStart, frames...)
 }
 
 type timeseries struct {
@@ -98,6 +104,20 @@ func (ts *timeseries) Get() []float64 {
 	return values
 }
 
+func (ts *timeseries) GetTime() time.Time {
+	ts.Lock()
+	defer ts.Unlock()
+
+	return ts.now
+}
+
+func (ts *timeseries) Sync(syncMetric Metric) {
+	ts.Lock()
+	defer ts.Unlock()
+
+	ts.now = syncMetric.(*timeseries).now
+}
+
 func strjson(x interface{}) string {
 	b, _ := json.Marshal(x)
 	return string(b)
@@ -127,7 +147,7 @@ func (c *counter) MarshalJSON() ([]byte, error) {
 	}{"c", c.value()})
 }
 
-func newTimeseries(builder func() Metric, frame string) *timeseries {
+func newTimeseries(builder func() Metric, frameStart time.Time, frame string) *timeseries {
 	var (
 		totalNum, intervalNum   int
 		totalUnit, intervalUnit rune
@@ -155,13 +175,13 @@ func newTimeseries(builder func() Metric, frame string) *timeseries {
 	for i := 0; i < n; i++ {
 		samples[i] = builder()
 	}
-	return &timeseries{interval: interval, samples: samples, now: now()}
+	return &timeseries{interval: interval, samples: samples, now: frameStart}
 }
 
-func newMetric(builder func() Metric, frames ...string) Metric {
+func newMetric(builder func() Metric, frameStart time.Time, frames ...string) Metric {
 	if len(frames) == 0 {
 		return builder()
 	}
 
-	return newTimeseries(builder, frames[0])
+	return newTimeseries(builder, frameStart, frames[0])
 }
