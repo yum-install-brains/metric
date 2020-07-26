@@ -2,7 +2,6 @@ package metric
 
 import (
 	"encoding/json"
-	"fmt"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -28,8 +27,8 @@ type Syncronizer interface {
 
 // NewCounter returns a counter metric that increments the value with each
 // incoming number.
-func NewCounter(frameStart time.Time, frames ...string) Metric {
-	return newMetric(func() Metric { return &counter{} }, frameStart, frames...)
+func NewCounter(frameStart time.Time, frame ...time.Duration) Metric {
+	return newMetric(func() Metric { return &counter{} }, frameStart, frame...)
 }
 
 type timeseries struct {
@@ -147,26 +146,12 @@ func (c *counter) MarshalJSON() ([]byte, error) {
 	}{"c", c.value()})
 }
 
-func newTimeseries(builder func() Metric, frameStart time.Time, frame string) *timeseries {
-	var (
-		totalNum, intervalNum   int
-		totalUnit, intervalUnit rune
-	)
-	units := map[rune]time.Duration{
-		's': time.Second,
-		'm': time.Minute,
-		'h': time.Hour,
-		'd': time.Hour * 24,
-		'w': time.Hour * 24 * 7,
-		'M': time.Hour * 24 * 7 * 30,
-		'y': time.Hour * 24 * 7 * 365,
-	}
-	fmt.Sscanf(frame, "%d%c%d%c", &totalNum, &totalUnit, &intervalNum, &intervalUnit)
-	interval := units[intervalUnit] * time.Duration(intervalNum)
+func newTimeseries(builder func() Metric, frameStart time.Time, frame ...time.Duration) *timeseries {
+	interval := frame[1]
 	if interval == 0 {
 		interval = time.Minute
 	}
-	totalDuration := units[totalUnit] * time.Duration(totalNum)
+	totalDuration := frame[0]
 	if totalDuration == 0 {
 		totalDuration = interval * 15
 	}
@@ -178,10 +163,10 @@ func newTimeseries(builder func() Metric, frameStart time.Time, frame string) *t
 	return &timeseries{interval: interval, samples: samples, now: frameStart}
 }
 
-func newMetric(builder func() Metric, frameStart time.Time, frames ...string) Metric {
-	if len(frames) == 0 {
+func newMetric(builder func() Metric, frameStart time.Time, frame ...time.Duration) Metric {
+	if len(frame) == 0 {
 		return builder()
 	}
 
-	return newTimeseries(builder, frameStart, frames[0])
+	return newTimeseries(builder, frameStart, frame...)
 }

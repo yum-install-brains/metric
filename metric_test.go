@@ -53,7 +53,7 @@ func TestCounter(t *testing.T) {
 
 func TestTimeline(t *testing.T) {
 	now = mockTime(0)
-	c := NewCounter(now(), "3s1s")
+	c := NewCounter(now(), 3*time.Second, time.Second)
 	count := func(x float64) h { return h{"type": "c", "count": x} }
 	assertJSON(t, c, h{"interval": 1, "samples": v{count(0), count(0), count(0)}})
 	c.Add(1)
@@ -71,7 +71,7 @@ func TestTimeline(t *testing.T) {
 func TestExpVar(t *testing.T) {
 	now = mockTime(0)
 	expvar.Publish("test:count", NewCounter(now()))
-	expvar.Publish("test:timeline", NewCounter(now(),"3s1s"))
+	expvar.Publish("test:timeline", NewCounter(now(), 3*time.Second, time.Second))
 	expvar.Get("test:count").(Metric).Add(1)
 	expvar.Get("test:timeline").(Metric).Add(1)
 	if expvar.Get("test:count").String() != `{"type":"c","count":1}` {
@@ -97,7 +97,7 @@ func BenchmarkMetrics(b *testing.B) {
 		}
 	})
 	b.Run("timeline/counter", func(b *testing.B) {
-		c := NewCounter(now(), "10s1s")
+		c := NewCounter(now(), 10*time.Second, time.Second)
 		for i := 0; i < b.N; i++ {
 			c.Add(rand.Float64())
 		}
